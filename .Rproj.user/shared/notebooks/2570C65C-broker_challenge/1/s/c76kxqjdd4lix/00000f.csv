@@ -1,0 +1,7 @@
+"0","## calculates policy duration"
+"0","broker_fused$policy_duration <- broker_fused$end - broker_fused$start"
+"0","## calculates if policy is active"
+"0","broker_fused <- broker_fused %>% mutate(active_policy = start<Sys.Date()&renewal>Sys.Date())"
+"0",""
+"0","## active policy subset"
+"0","broker_fused %>% filter(active_policy == TRUE) -> active_policies"

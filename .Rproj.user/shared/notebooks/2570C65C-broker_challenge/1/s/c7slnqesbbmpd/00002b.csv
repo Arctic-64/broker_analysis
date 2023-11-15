@@ -1,0 +1,4 @@
+"0","broker_fused %>% summarise(mean(policy_duration, na.rm = TRUE)) -> average_policy_duration"
+"0",""
+"0","##result"
+"0","average_policy_duration ## 365.3333 days	"

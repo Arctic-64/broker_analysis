@@ -1,0 +1,14 @@
+{
+    "type": [
+        0,
+        1,
+        3,
+        2
+    ],
+    "data": [
+        "> ",
+        "j",
+        "Error: object 'j' not found\n",
+        "\nRestarting R session...\n\n"
+    ]
+}

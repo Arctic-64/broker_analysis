@@ -1,0 +1,8 @@
+"0","date_variables = c(""start"", ""end"", ""activation_date"", ""renewal"")"
+"0",""
+"0","for(i in date_variables) {"
+"0","  broker1[i] <- as_date(dmy(broker1[[i]]))"
+"0","  broker2[i] <- as_date(dmy(broker2[[i]]))"
+"0","}"
+"2","Warning:  1 failed to parse."
+"0","rm(date_variables, i)"

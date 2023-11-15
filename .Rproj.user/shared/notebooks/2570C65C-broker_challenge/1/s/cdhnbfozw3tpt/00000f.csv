@@ -1,0 +1,8 @@
+"0","numeric_variables <- c(""amount"", ""admin_cost"", ""commission"", ""tax_amount"", ""coverage_cost"", ""policy_fee"")"
+"0",""
+"0","for(i in numeric_variables) {"
+"0","  broker1[i] <- as.numeric(broker1[[i]])"
+"0","  broker2[i] <- as.numeric(broker2[[i]])"
+"0","}"
+"2","Warning: NAs introduced by coercion"
+"0","rm(numeric_variables, i)"

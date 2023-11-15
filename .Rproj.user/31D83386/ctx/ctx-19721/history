@@ -1,0 +1,512 @@
+broker2 <- read.csv(here("broker2.csv"))
+##STANDERDISED VARIABLE NAMES
+variable_names_standardised <- c("policy_id_number",
+"amount",
+"start",
+"end",
+"admin_cost",
+"description",
+"event",
+"client_catagory",
+"client_id",
+"commission",
+"activation_date",
+"insurance_id",
+"tax_amount",
+"coverage_cost",
+"policy_fee",
+"policy_type",
+"insurer",
+"insurance_plan",
+"renewal",
+"root_policy_referance")
+##ASSERT ORDER OF VARIABLES
+broker1 <- broker1 %>% select(
+"PolicyNumber",
+"InsuredAmount",
+"StartDate",
+"EndDate",
+"AdminFee",
+"BusinessDescription",
+"BusinessEvent",
+"ClientType",
+"ClientRef",
+"Commission",
+"EffectiveDate",
+"InsurerPolicyNumber",
+"IPTAmount",
+"Premium",
+"PolicyFee",
+"PolicyType",
+"Insurer",
+"Product",
+"RenewalDate",
+"RootPolicyRef")
+broker2<-broker2%>%select(
+"PolicyRef",
+"CoverageAmount",
+"InitiationDate",
+"ExpirationDate",
+"AdminCharges",
+"CompanyDescription",
+"ContractEvent",
+"ConsumerCategory",
+"ConsumerID",
+"BrokerFee",
+"ActivationDate",
+"InsuranceCompanyRef",
+"TaxAmount",
+"CoverageCost",
+"ContractFee",
+"ContractCategory",
+"Underwriter",
+"InsurancePlan",
+"NextRenewalDate",
+"PrimaryPolicyRef")
+##REPLACE VARIABLE NAMES
+colnames(broker1) <- variable_names_standardised
+colnames(broker2) <- variable_names_standardised
+#cleanup
+rm(variable_names_standardised)
+##function which extracts Id numbers, normalises them and adds a uniform prefix.
+number_ext3_prefix = function(data, prefix) {
+str_replace_all(data, "[:alpha:]", "") %>%
+str_pad(3, side = "left", pad = "0") %>%
+paste0(prefix, x = .)
+}
+## standardize policy_id_number
+broker1$policy_id_number <- broker1$policy_id_number %>% number_ext3_prefix("POL")
+broker2$policy_id_number <- broker2$policy_id_number %>% number_ext3_prefix("POL")
+## standardize client ID (ASSUMPTION THAT CLIENT NUMBER IS THE IDENTIFIER IRRESPECTIVE OF LETTER PREFIX)
+## do not run chunk if client_id should not be standardized this way
+broker1$client_id <- broker1$client_id %>% number_ext3_prefix("CID")
+broker2$client_id <- broker2$client_id %>% number_ext3_prefix("CID")
+## INSURANCE ID
+broker1$insurance_id <- broker1$insurance_id %>% number_ext3_prefix("IPN")
+broker2$insurance_id <- broker2$insurance_id %>% number_ext3_prefix("IPN")
+## root_policy_referance
+broker1$root_policy_referance <- broker1$root_policy_referance %>% number_ext3_prefix("RP")
+broker2$root_policy_referance <- broker2$root_policy_referance %>% number_ext3_prefix("RP")
+##function cleanup (not necessary)
+rm(number_ext3_prefix)
+## description standardization (assumes this is relevant format for the sake of the test)
+## INSURER DOES NOT APPEAR TO BE A FEILD IN NEED OF STANDERDISATION DISPITE SIMMILAR FORMAT
+## do not run chunk if description need not be standardized.
+## duplicate code and modify REGEX and target if insurer need to be standardized too
+broker1$description <- broker1$description %>% str_extract("([[:alnum:]]+)$") %>%
+paste0("Buisness ", x = .)
+broker2$description <- broker2$description %>% str_extract("([[:alnum:]]+)$") %>%
+paste0("Buisness ", x = .)
+numeric_variables <- c("amount", "admin_cost", "commission", "tax_amount", "coverage_cost", "policy_fee")
+for(i in numeric_variables) {
+broker1[i] <- as.numeric(broker1[[i]])
+broker2[i] <- as.numeric(broker2[[i]])
+}
+rm(numeric_variables, i)
+date_variables = c("start", "end", "activation_date", "renewal")
+for(i in date_variables) {
+broker1[i] <- as_date(dmy(broker1[[i]]))
+broker2[i] <- as_date(dmy(broker2[[i]]))
+}
+rm(date_variables, i)
+## overview of categorical variables
+#print(unique(broker1$event))
+#print(unique(broker2$event))
+##new policies
+x <- str_which(broker1$event, "^(New)\\s|^(new)\\s|initiation|Initiation")
+broker1[x, "event"] <- "New"
+rm(x)
+x <- str_which(broker2$event, "^(New)\\s|^(new)\\s|initiation|Initiation")
+broker2[x, "event"] <- "New"
+rm(x)
+##renewals
+x <- str_which(broker1$event, ".*renew.*|.*Renew.*|.*renewal.*|.*Renewal.*")
+broker1[x, "event"] <- "Renewal"
+rm(x)
+x <- str_which(broker2$event, ".*renew.*|.*Renew.*|.*renewal.*|.*Renewal.*")
+broker2[x, "event"] <- "Renewal"
+rm(x)
+## policy updates (possibly identical to renewals, but kept separate due to possible difference, edit as needed)
+x <- str_which(broker1$event, ".*update.*|.*Update.*")
+broker1[x, "event"] <- "Update"
+rm(x)
+x <- str_which(broker2$event, ".*update.*|.*Update.*")
+broker2[x, "event"] <- "Update"
+rm(x)
+## create broker identification
+broker1$broker_ID <- "broker1"
+broker2$broker_ID <- "broker2"
+broker_fused <- rbind(broker1, broker2)
+## count NA values across data set for manual review and specify affected variables
+broker_fused %>% summarise_all(funs(sum(is.na(.)))) %>% select_if(colSums(.) != 0)
+## there are two missing entries across the dataset in start date and coverage cost
+## calculates policy duration
+broker_fused$policy_duration <- broker_fused$end - broker_fused$start
+## calculates if policy is active
+broker_fused <- broker_fused %>% mutate(active_policy = start<Sys.Date()&renewal>Sys.Date())
+## creates sub dataset of active policies
+broker_fused %>% filter(active_policy == TRUE) -> active_policies
+active_policies %>%
+group_by(broker_ID) %>%
+summarise(length(unique(policy_id_number)))
+active_policies %>%
+group_by(broker_ID) %>%
+summarise(length(unique(client_id)))
+active_policies %>%
+group_by(broker_ID) %>%
+summarise(sum(amount, na.rm = TRUE))
+broker_fused %>%
+filter(active_policy == TRUE) %>%
+group_by(broker_ID) %>%
+summarise(mean(policy_duration, na.rm = TRUE)) -> average_active_policy_duration_by_broker
+##result
+average_active_policy_duration_by_broker ## broker1 = 365.8182 days	broker2 = 365.5714 days
+rm(list=ls())
+# Required packages
+# Package names
+packages <- c("tidyverse", "here", "lubridate")
+# Install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+install.packages(packages[!installed_packages])
+}
+invisible(sapply(packages, library, character.only = TRUE))
+## cleanup
+rm(installed_packages, packages)
+broker1 <- read.csv(here("broker1.csv"))
+broker2 <- read.csv(here("broker2.csv"))
+##STANDERDISED VARIABLE NAMES
+variable_names_standardised <- c("policy_id_number",
+"amount",
+"start",
+"end",
+"admin_cost",
+"description",
+"event",
+"client_catagory",
+"client_id",
+"commission",
+"activation_date",
+"insurance_id",
+"tax_amount",
+"coverage_cost",
+"policy_fee",
+"policy_type",
+"insurer",
+"insurance_plan",
+"renewal",
+"root_policy_referance")
+##ASSERT ORDER OF VARIABLES
+broker1 <- broker1 %>% select(
+"PolicyNumber",
+"InsuredAmount",
+"StartDate",
+"EndDate",
+"AdminFee",
+"BusinessDescription",
+"BusinessEvent",
+"ClientType",
+"ClientRef",
+"Commission",
+"EffectiveDate",
+"InsurerPolicyNumber",
+"IPTAmount",
+"Premium",
+"PolicyFee",
+"PolicyType",
+"Insurer",
+"Product",
+"RenewalDate",
+"RootPolicyRef")
+broker2<-broker2%>%select(
+"PolicyRef",
+"CoverageAmount",
+"InitiationDate",
+"ExpirationDate",
+"AdminCharges",
+"CompanyDescription",
+"ContractEvent",
+"ConsumerCategory",
+"ConsumerID",
+"BrokerFee",
+"ActivationDate",
+"InsuranceCompanyRef",
+"TaxAmount",
+"CoverageCost",
+"ContractFee",
+"ContractCategory",
+"Underwriter",
+"InsurancePlan",
+"NextRenewalDate",
+"PrimaryPolicyRef")
+##REPLACE VARIABLE NAMES
+colnames(broker1) <- variable_names_standardised
+colnames(broker2) <- variable_names_standardised
+#cleanup
+rm(variable_names_standardised)
+##function which extracts Id numbers, normalises them and adds a uniform prefix.
+number_ext3_prefix = function(data, prefix) {
+str_replace_all(data, "[:alpha:]", "") %>%
+str_pad(3, side = "left", pad = "0") %>%
+paste0(prefix, x = .)
+}
+## standardize policy_id_number
+broker1$policy_id_number <- broker1$policy_id_number %>% number_ext3_prefix("POL")
+broker2$policy_id_number <- broker2$policy_id_number %>% number_ext3_prefix("POL")
+## standardize client ID (ASSUMPTION THAT CLIENT NUMBER IS THE IDENTIFIER IRRESPECTIVE OF LETTER PREFIX)
+## do not run chunk if client_id should not be standardized this way
+broker1$client_id <- broker1$client_id %>% number_ext3_prefix("CID")
+broker2$client_id <- broker2$client_id %>% number_ext3_prefix("CID")
+## INSURANCE ID
+broker1$insurance_id <- broker1$insurance_id %>% number_ext3_prefix("IPN")
+broker2$insurance_id <- broker2$insurance_id %>% number_ext3_prefix("IPN")
+## root_policy_referance
+broker1$root_policy_referance <- broker1$root_policy_referance %>% number_ext3_prefix("RP")
+broker2$root_policy_referance <- broker2$root_policy_referance %>% number_ext3_prefix("RP")
+##function cleanup (not necessary)
+rm(number_ext3_prefix)
+## description standardization (assumes this is relevant format for the sake of the test)
+## INSURER DOES NOT APPEAR TO BE A FEILD IN NEED OF STANDERDISATION DISPITE SIMMILAR FORMAT
+## do not run chunk if description need not be standardized.
+## duplicate code and modify REGEX and target if insurer need to be standardized too
+broker1$description <- broker1$description %>% str_extract("([[:alnum:]]+)$") %>%
+paste0("Buisness ", x = .)
+broker2$description <- broker2$description %>% str_extract("([[:alnum:]]+)$") %>%
+paste0("Buisness ", x = .)
+numeric_variables <- c("amount", "admin_cost", "commission", "tax_amount", "coverage_cost", "policy_fee")
+for(i in numeric_variables) {
+broker1[i] <- as.numeric(broker1[[i]])
+broker2[i] <- as.numeric(broker2[[i]])
+}
+rm(numeric_variables, i)
+date_variables = c("start", "end", "activation_date", "renewal")
+for(i in date_variables) {
+broker1[i] <- as_date(dmy(broker1[[i]]))
+broker2[i] <- as_date(dmy(broker2[[i]]))
+}
+rm(date_variables, i)
+## overview of categorical variables
+#print(unique(broker1$event))
+#print(unique(broker2$event))
+##new policies
+x <- str_which(broker1$event, "^(New)\\s|^(new)\\s|initiation|Initiation")
+broker1[x, "event"] <- "New"
+rm(x)
+x <- str_which(broker2$event, "^(New)\\s|^(new)\\s|initiation|Initiation")
+broker2[x, "event"] <- "New"
+rm(x)
+##renewals
+x <- str_which(broker1$event, ".*renew.*|.*Renew.*|.*renewal.*|.*Renewal.*")
+broker1[x, "event"] <- "Renewal"
+rm(x)
+x <- str_which(broker2$event, ".*renew.*|.*Renew.*|.*renewal.*|.*Renewal.*")
+broker2[x, "event"] <- "Renewal"
+rm(x)
+## policy updates (possibly identical to renewals, but kept separate due to possible difference, edit as needed)
+x <- str_which(broker1$event, ".*update.*|.*Update.*")
+broker1[x, "event"] <- "Update"
+rm(x)
+x <- str_which(broker2$event, ".*update.*|.*Update.*")
+broker2[x, "event"] <- "Update"
+rm(x)
+## create broker identification
+broker1$broker_ID <- "broker1"
+broker2$broker_ID <- "broker2"
+broker_fused <- rbind(broker1, broker2)
+## count NA values across data set for manual review and specify affected variables
+broker_fused %>% summarise_all(funs(sum(is.na(.)))) %>% select_if(colSums(.) != 0)
+## there are two missing entries across the dataset in start date and coverage cost
+## calculates policy duration
+broker_fused$policy_duration <- broker_fused$end - broker_fused$start
+## calculates if policy is active
+broker_fused <- broker_fused %>% mutate(active_policy = start<Sys.Date()&renewal>Sys.Date())
+## creates sub dataset of active policies
+broker_fused %>% filter(active_policy == TRUE) -> active_policies
+active_policies %>%
+group_by(broker_ID) %>%
+summarise(length(unique(policy_id_number)))
+active_policies %>%
+group_by(broker_ID) %>%
+summarise(length(unique(client_id)))
+active_policies %>%
+group_by(broker_ID) %>%
+summarise(sum(amount, na.rm = TRUE))
+broker_fused %>%
+filter(active_policy == TRUE) %>%
+group_by(broker_ID) %>%
+summarise(mean(policy_duration, na.rm = TRUE)) -> average_active_policy_duration_by_broker
+rm(list=ls())
+# Required packages
+# Package names
+packages <- c("tidyverse", "here", "lubridate")
+# Install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+install.packages(packages[!installed_packages])
+}
+invisible(sapply(packages, library, character.only = TRUE))
+## cleanup
+rm(installed_packages, packages)
+broker1 <- read.csv(here("broker1.csv"))
+broker2 <- read.csv(here("broker2.csv"))
+##STANDERDISED VARIABLE NAMES
+variable_names_standardised <- c("policy_id_number",
+"amount",
+"start",
+"end",
+"admin_cost",
+"description",
+"event",
+"client_catagory",
+"client_id",
+"commission",
+"activation_date",
+"insurance_id",
+"tax_amount",
+"coverage_cost",
+"policy_fee",
+"policy_type",
+"insurer",
+"insurance_plan",
+"renewal",
+"root_policy_referance")
+##ASSERT ORDER OF VARIABLES
+broker1 <- broker1 %>% select(
+"PolicyNumber",
+"InsuredAmount",
+"StartDate",
+"EndDate",
+"AdminFee",
+"BusinessDescription",
+"BusinessEvent",
+"ClientType",
+"ClientRef",
+"Commission",
+"EffectiveDate",
+"InsurerPolicyNumber",
+"IPTAmount",
+"Premium",
+"PolicyFee",
+"PolicyType",
+"Insurer",
+"Product",
+"RenewalDate",
+"RootPolicyRef")
+broker2<-broker2%>%select(
+"PolicyRef",
+"CoverageAmount",
+"InitiationDate",
+"ExpirationDate",
+"AdminCharges",
+"CompanyDescription",
+"ContractEvent",
+"ConsumerCategory",
+"ConsumerID",
+"BrokerFee",
+"ActivationDate",
+"InsuranceCompanyRef",
+"TaxAmount",
+"CoverageCost",
+"ContractFee",
+"ContractCategory",
+"Underwriter",
+"InsurancePlan",
+"NextRenewalDate",
+"PrimaryPolicyRef")
+##REPLACE VARIABLE NAMES
+colnames(broker1) <- variable_names_standardised
+colnames(broker2) <- variable_names_standardised
+#cleanup
+rm(variable_names_standardised)
+##function which extracts Id numbers, normalises them and adds a uniform prefix.
+number_ext3_prefix = function(data, prefix) {
+str_replace_all(data, "[:alpha:]", "") %>%
+str_pad(3, side = "left", pad = "0") %>%
+paste0(prefix, x = .)
+}
+## standardize policy_id_number
+broker1$policy_id_number <- broker1$policy_id_number %>% number_ext3_prefix("POL")
+broker2$policy_id_number <- broker2$policy_id_number %>% number_ext3_prefix("POL")
+## standardize client ID (ASSUMPTION THAT CLIENT NUMBER IS THE IDENTIFIER IRRESPECTIVE OF LETTER PREFIX)
+## do not run chunk if client_id should not be standardized this way
+broker1$client_id <- broker1$client_id %>% number_ext3_prefix("CID")
+broker2$client_id <- broker2$client_id %>% number_ext3_prefix("CID")
+## INSURANCE ID
+broker1$insurance_id <- broker1$insurance_id %>% number_ext3_prefix("IPN")
+broker2$insurance_id <- broker2$insurance_id %>% number_ext3_prefix("IPN")
+## root_policy_referance
+broker1$root_policy_referance <- broker1$root_policy_referance %>% number_ext3_prefix("RP")
+broker2$root_policy_referance <- broker2$root_policy_referance %>% number_ext3_prefix("RP")
+##function cleanup (not necessary)
+rm(number_ext3_prefix)
+## description standardization (assumes this is relevant format for the sake of the test)
+## INSURER DOES NOT APPEAR TO BE A FEILD IN NEED OF STANDERDISATION DISPITE SIMMILAR FORMAT
+## do not run chunk if description need not be standardized.
+## duplicate code and modify REGEX and target if insurer need to be standardized too
+broker1$description <- broker1$description %>% str_extract("([[:alnum:]]+)$") %>%
+paste0("Buisness ", x = .)
+broker2$description <- broker2$description %>% str_extract("([[:alnum:]]+)$") %>%
+paste0("Buisness ", x = .)
+numeric_variables <- c("amount", "admin_cost", "commission", "tax_amount", "coverage_cost", "policy_fee")
+for(i in numeric_variables) {
+broker1[i] <- as.numeric(broker1[[i]])
+broker2[i] <- as.numeric(broker2[[i]])
+}
+rm(numeric_variables, i)
+date_variables = c("start", "end", "activation_date", "renewal")
+for(i in date_variables) {
+broker1[i] <- as_date(dmy(broker1[[i]]))
+broker2[i] <- as_date(dmy(broker2[[i]]))
+}
+rm(date_variables, i)
+## overview of categorical variables
+#print(unique(broker1$event))
+#print(unique(broker2$event))
+##new policies
+x <- str_which(broker1$event, "^(New)\\s|^(new)\\s|initiation|Initiation")
+broker1[x, "event"] <- "New"
+rm(x)
+x <- str_which(broker2$event, "^(New)\\s|^(new)\\s|initiation|Initiation")
+broker2[x, "event"] <- "New"
+rm(x)
+##renewals
+x <- str_which(broker1$event, ".*renew.*|.*Renew.*|.*renewal.*|.*Renewal.*")
+broker1[x, "event"] <- "Renewal"
+rm(x)
+x <- str_which(broker2$event, ".*renew.*|.*Renew.*|.*renewal.*|.*Renewal.*")
+broker2[x, "event"] <- "Renewal"
+rm(x)
+## policy updates (possibly identical to renewals, but kept separate due to possible difference, edit as needed)
+x <- str_which(broker1$event, ".*update.*|.*Update.*")
+broker1[x, "event"] <- "Update"
+rm(x)
+x <- str_which(broker2$event, ".*update.*|.*Update.*")
+broker2[x, "event"] <- "Update"
+rm(x)
+## create broker identification
+broker1$broker_ID <- "broker1"
+broker2$broker_ID <- "broker2"
+broker_fused <- rbind(broker1, broker2)
+## count NA values across data set for manual review and specify affected variables
+broker_fused %>% summarise_all(funs(sum(is.na(.)))) %>% select_if(colSums(.) != 0)
+## there are two missing entries across the dataset in start date and coverage cost
+## calculates policy duration
+broker_fused$policy_duration <- broker_fused$end - broker_fused$start
+## calculates if policy is active
+broker_fused <- broker_fused %>% mutate(active_policy = start<Sys.Date()&renewal>Sys.Date())
+## creates sub dataset of active policies
+broker_fused %>% filter(active_policy == TRUE) -> active_policies
+active_policies %>%
+group_by(broker_ID) %>%
+summarise(length(unique(policy_id_number)))
+active_policies %>%
+group_by(broker_ID) %>%
+summarise(length(unique(client_id)))
+active_policies %>%
+group_by(broker_ID) %>%
+summarise(sum(amount, na.rm = TRUE))
+broker_fused %>%
+filter(active_policy == TRUE) %>%
+group_by(broker_ID) %>%
+summarise(mean(policy_duration, na.rm = TRUE))
+j

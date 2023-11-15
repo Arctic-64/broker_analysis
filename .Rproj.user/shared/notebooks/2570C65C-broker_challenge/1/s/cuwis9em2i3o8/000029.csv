@@ -1,0 +1,3 @@
+"0","active_policies %>% "
+"0","  group_by(broker_ID) %>% "
+"0","  summarise(length(unique(client_id)))"

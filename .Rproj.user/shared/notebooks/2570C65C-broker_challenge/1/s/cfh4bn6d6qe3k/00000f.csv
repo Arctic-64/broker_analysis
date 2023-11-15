@@ -1,0 +1,6 @@
+"0","##function which extracts Id numbers, normalizes them and adds a uniform prefix."
+"0","number_ext3_prefix = function(data, prefix) {"
+"0","  str_replace_all(data, ""[[:alpha:]\\s\\t]"", """") %>% "
+"0","  str_pad(3, side = ""left"", pad = ""0"") %>%"
+"0","  paste0(prefix, x = .)"
+"0","}"

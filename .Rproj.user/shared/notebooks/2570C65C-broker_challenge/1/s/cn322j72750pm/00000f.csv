@@ -1,0 +1,8 @@
+"0","total_insurance_amount <- sum(broker_fused$amount)"
+"0",""
+"0","##result"
+"0","total_insurance_amount ## 46637000 (currency and units not specified)"
+"1","[1]"
+"1"," 46637000"
+"1","
+"

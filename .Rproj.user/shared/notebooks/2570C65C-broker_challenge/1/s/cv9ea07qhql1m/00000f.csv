@@ -1,0 +1,4 @@
+"0","## standardize client ID (ASSUMPTION THAT CLIENT NUMBER IS THE IDENTIFIER IRRESPECTIVE OF LETTER PREFIX)"
+"0","## do not run chunk if client_id should not be standardized this way"
+"0","broker1$client_id <- broker1$client_id %>% number_ext3_prefix(""CID"")"
+"0","broker2$client_id <- broker2$client_id %>% number_ext3_prefix(""CID"")"

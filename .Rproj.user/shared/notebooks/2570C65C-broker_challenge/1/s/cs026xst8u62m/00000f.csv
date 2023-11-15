@@ -1,0 +1,4 @@
+"0","## create broker identification"
+"0","broker1$broker_ID <- ""broker1"""
+"0","broker2$broker_ID <- ""broker2"""
+"0","broker_fused <- rbind(broker1, broker2)"

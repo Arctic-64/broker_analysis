@@ -1,0 +1,3 @@
+"0","## INSURANCE ID"
+"0","broker1$insurance_id <- broker1$insurance_id %>% number_ext3_prefix(""IPN"")"
+"0","broker2$insurance_id <- broker2$insurance_id %>% number_ext3_prefix(""IPN"")"
